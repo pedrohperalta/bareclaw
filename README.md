@@ -85,9 +85,9 @@ Adapters derive channel keys from whatever their natural session boundary is. Th
 | Adapter | Channel key | Derived from |
 |---------|------------|--------------|
 | HTTP | Caller-controlled via `channel` field. Defaults to `"http"`. | Request body |
-| Telegram | `tg-<chatId>` | `ctx.chat.id` |
+| Telegram | `tg-<chatId>` (DMs/groups) or `tg-<chatId>-<threadId>` (forum topics) | `ctx.chat.id` + `message_thread_id` |
 
-> **Pro tip:** Telegram supergroups with **Topics** enabled give you multiple independent Claude sessions in one group. Each topic is a separate conversation thread — create topics like "Code Review", "Research", "Ops" and each gets its own persistent session with isolated context. Currently all topics in a group share one channel (keyed by chat ID), but this is a natural extension point: key on `chatId-threadId` to get per-topic sessions.
+> **Pro tip:** Telegram supergroups with **Topics** enabled give you multiple independent Claude sessions in one group. Each topic gets its own channel (keyed as `tg-<chatId>-<threadId>`), so topics like "Code Review", "Research", "Ops" each get a persistent session with isolated context.
 
 ## Concurrency model
 

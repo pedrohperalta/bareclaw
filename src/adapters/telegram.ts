@@ -264,16 +264,15 @@ export function createTelegramAdapter(config: Config, processManager: ProcessMan
       let sentStreamed = false;
       const status = new StatusLine(ctx);
 
-      const channel = `tg-${ctx.chat!.id}`;
       const msg = ctx.message as Record<string, unknown> | undefined;
-      const replyTo = msg?.reply_to_message as Record<string, unknown> | undefined;
-      const forumTopic = replyTo?.forum_topic_created as { name?: string } | undefined;
+      const threadId = msg?.message_thread_id as number | undefined;
+      const channel = threadId ? `tg-${ctx.chat!.id}-${threadId}` : `tg-${ctx.chat!.id}`;
       const context: ChannelContext = {
         channel,
         adapter: 'telegram',
         userName: ctx.from ? [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(' ') : undefined,
         chatTitle: ctx.chat!.type !== 'private' ? (ctx.chat as { title?: string }).title : undefined,
-        topicName: forumTopic?.name || undefined,
+        topicName: threadId ? String(threadId) : undefined,
       };
       const response = await processManager.send(channel, content, context, (event: ClaudeEvent) => {
         if (event.type === 'system' && event.subtype === 'compact_boundary') {
