@@ -129,6 +129,16 @@ const server = createServer((socket) => {
 
   const socketRl = createInterface({ input: socket, crlfDelay: Infinity });
   socketRl.on('line', (line) => {
+    // Handle interrupt signal — SIGINT Claude to stop current turn
+    try {
+      const msg = JSON.parse(line);
+      if (msg.type === 'interrupt') {
+        log('interrupt requested — sending SIGINT to claude');
+        claude.kill('SIGINT');
+        return;
+      }
+    } catch {}
+
     // If Claude died, respawn before sending the message
     if (claude.exitCode !== null || claude.killed) {
       log('claude is dead, respawning before dispatch');

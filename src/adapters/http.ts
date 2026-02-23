@@ -20,18 +20,24 @@ export function createHttpAdapter(config: Config, processManager: ProcessManager
   }
 
   router.post('/message', async (req, res) => {
-    const { text, channel } = req.body as SendMessageRequest;
+    const { text, channel, content } = req.body as SendMessageRequest & { content?: unknown };
 
-    if (!text || typeof text !== 'string') {
-      res.status(400).json({ error: 'Missing "text" field' });
+    // Accept either "text" (string) or "content" (ContentBlock[]) for multimodal
+    const messageContent = content && Array.isArray(content) ? content : text;
+
+    if (!messageContent || (typeof messageContent === 'string' && !messageContent.trim())) {
+      res.status(400).json({ error: 'Missing "text" or "content" field' });
       return;
     }
 
     const ch = channel || 'http';
-    console.log(`[http] ← ${ch}: ${text.substring(0, 80)}${text.length > 80 ? '...' : ''}`);
+    const label = typeof messageContent === 'string'
+      ? messageContent.substring(0, 80) + (messageContent.length > 80 ? '...' : '')
+      : `[${(messageContent as unknown[]).length} content blocks]`;
+    console.log(`[http] ← ${ch}: ${label}`);
 
     try {
-      const response = await processManager.send(ch, text);
+      const response = await processManager.send(ch, messageContent);
       console.log(`[http] → ${ch}: ${response.duration_ms}ms`);
       res.json(response);
     } catch (err) {

@@ -1,7 +1,12 @@
+/** Content block for multimodal messages (text + images) */
+export type ContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } };
+
 /** NDJSON message written to claude's stdin */
 export interface ClaudeInput {
   type: 'user';
-  message: { role: 'user'; content: string };
+  message: { role: 'user'; content: string | ContentBlock[] };
 }
 
 /** Any NDJSON event from claude's stdout */

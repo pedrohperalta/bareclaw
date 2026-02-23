@@ -4,12 +4,15 @@ import { createInterface, type Interface } from 'readline';
 import { readFileSync, writeFileSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
 import type { Config } from '../config.js';
-import type { ClaudeEvent, ClaudeInput, SendMessageResponse } from './types.js';
+import type { ClaudeEvent, ClaudeInput, ContentBlock, SendMessageResponse } from './types.js';
 
 export type EventCallback = (event: ClaudeEvent) => void;
 
+/** Content passed through ProcessManager — plain string or multimodal blocks */
+export type MessageContent = string | ContentBlock[];
+
 interface QueuedMessage {
-  text: string;
+  content: MessageContent;
   resolve: (r: SendMessageResponse) => void;
   reject: (e: Error) => void;
   onEvent?: EventCallback;
@@ -75,7 +78,7 @@ export class ProcessManager {
    * Callers don't need to coordinate — multiple concurrent send() calls to the
    * same channel are safe and will be processed in arrival order.
    */
-  async send(channel: string, text: string, onEvent?: EventCallback): Promise<SendMessageResponse> {
+  async send(channel: string, content: MessageContent, onEvent?: EventCallback): Promise<SendMessageResponse> {
     let managed = this.channels.get(channel);
 
     if (!managed) {
@@ -93,15 +96,16 @@ export class ProcessManager {
       }
     }
 
-    // Channel is processing another message — queue this one.
-    // The promise resolves when drainQueue() gets to it.
+    // Channel is busy — interrupt the current turn so this message gets through faster
     if (managed.busy) {
+      managed.socket.write(JSON.stringify({ type: 'interrupt' }) + '\n');
+      console.log(`[process-manager] [${channel}] interrupted current turn for new message`);
       return new Promise((resolve, reject) => {
-        managed!.queue.push({ text, resolve, reject, onEvent });
+        managed!.queue.push({ content, resolve, reject, onEvent });
       });
     }
 
-    return this.dispatch(managed, text, onEvent);
+    return this.dispatch(managed, content, onEvent);
   }
 
   /** Disconnect from session hosts (they stay alive for reconnection) */
@@ -273,7 +277,7 @@ export class ProcessManager {
    * the duration, preventing concurrent writes to the NDJSON stream.
    * On completion, calls drainQueue() to process the next queued message.
    */
-  private dispatch(managed: ManagedChannel, text: string, onEvent?: EventCallback): Promise<SendMessageResponse> {
+  private dispatch(managed: ManagedChannel, content: MessageContent, onEvent?: EventCallback): Promise<SendMessageResponse> {
     managed.busy = true;
     const start = Date.now();
 
@@ -311,7 +315,7 @@ export class ProcessManager {
 
       const msg: ClaudeInput = {
         type: 'user',
-        message: { role: 'user', content: text },
+        message: { role: 'user', content },
       };
       managed.socket.write(JSON.stringify(msg) + '\n');
     });
@@ -336,19 +340,29 @@ export class ProcessManager {
     if (batch.length === 1) {
       // Common case — no coalescing needed
       const msg = batch[0];
-      this.dispatch(managed, msg.text, msg.onEvent).then(msg.resolve, msg.reject);
+      this.dispatch(managed, msg.content, msg.onEvent).then(msg.resolve, msg.reject);
       return;
     }
 
-    // Coalesce: combine text, resolve earlier messages as coalesced
-    const combinedText = batch.map(m => m.text).join('\n\n');
-    console.log(`[process-manager] coalescing ${batch.length} queued messages`);
+    // Coalescing only works when all messages are plain text.
+    // Content blocks (images, etc.) must be dispatched individually.
+    const allText = batch.every(m => typeof m.content === 'string');
 
-    for (let i = 0; i < batch.length - 1; i++) {
-      batch[i].resolve({ text: '', duration_ms: 0, coalesced: true });
+    if (allText) {
+      const combinedText = batch.map(m => m.content as string).join('\n\n');
+      console.log(`[process-manager] coalescing ${batch.length} queued messages`);
+
+      for (let i = 0; i < batch.length - 1; i++) {
+        batch[i].resolve({ text: '', duration_ms: 0, coalesced: true });
+      }
+
+      const last = batch[batch.length - 1];
+      this.dispatch(managed, combinedText, last.onEvent).then(last.resolve, last.reject);
+    } else {
+      // Dispatch first, re-queue the rest
+      const first = batch[0];
+      managed.queue.unshift(...batch.slice(1));
+      this.dispatch(managed, first.content, first.onEvent).then(first.resolve, first.reject);
     }
-
-    const last = batch[batch.length - 1];
-    this.dispatch(managed, combinedText, last.onEvent).then(last.resolve, last.reject);
   }
 }

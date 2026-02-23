@@ -13,7 +13,8 @@ import { Telegraf } from 'telegraf';
 import type { Context } from 'telegraf';
 import type { Config } from '../config.js';
 import type { ProcessManager } from '../core/process-manager.js';
-import type { ClaudeEvent, PushHandler } from '../core/types.js';
+import type { MessageContent } from '../core/process-manager.js';
+import type { ClaudeEvent, ContentBlock, PushHandler } from '../core/types.js';
 
 const MAX_MESSAGE_LENGTH = 4096;
 
@@ -160,16 +161,16 @@ export function createTelegramAdapter(config: Config, processManager: ProcessMan
     console.error(`[telegram] unhandled error: ${err instanceof Error ? err.message : err}`);
   });
 
-  bot.on('text', async (ctx) => {
-    const userId = ctx.from.id;
+  /** Shared handler: auth check, typing, send to Claude, stream events back */
+  async function handleMessage(ctx: Context, content: MessageContent, logLabel: string): Promise<void> {
+    const userId = ctx.from!.id;
 
     if (!config.allowedUsers.includes(userId)) {
       console.log(`[telegram] blocked message from user ${userId}`);
       return;
     }
 
-    const text = ctx.message.text;
-    console.log(`[telegram] <- user ${userId}: ${text.substring(0, 80)}${text.length > 80 ? '...' : ''}`);
+    console.log(`[telegram] <- user ${userId}: ${logLabel}`);
 
     // Show typing indicator
     await ctx.sendChatAction('typing');
@@ -181,9 +182,18 @@ export function createTelegramAdapter(config: Config, processManager: ProcessMan
       // Chain intermediate sends to preserve ordering
       let sendChain = Promise.resolve();
       let sentIntermediate = false;
+      let compacting = false;
 
-      const channel = `tg-${ctx.chat.id}`;
-      const response = await processManager.send(channel, text, (event: ClaudeEvent) => {
+      const channel = `tg-${ctx.chat!.id}`;
+      const response = await processManager.send(channel, content, (event: ClaudeEvent) => {
+        // Suppress all streaming during context compaction
+        if (event.type === 'system' && event.subtype === 'compact_boundary') {
+          compacting = true;
+          console.log(`[telegram] compact boundary — suppressing stream output`);
+          return;
+        }
+        if (compacting) return;
+
         const { text: assistantText, toolUse, toolResult } = extractContent(event);
 
         if (assistantText) {
@@ -216,8 +226,9 @@ export function createTelegramAdapter(config: Config, processManager: ProcessMan
 
       console.log(`[telegram] -> user ${userId}: ${response.duration_ms}ms`);
 
-      // Only send final result if we didn't already stream content
-      if (!sentIntermediate) {
+      // Only send final result if we didn't already stream content.
+      // If compaction happened, the result text is the summary — skip it.
+      if (!sentIntermediate && !compacting) {
         await sendHtml(ctx, escapeHtml(response.text));
       }
     } catch (err) {
@@ -225,6 +236,46 @@ export function createTelegramAdapter(config: Config, processManager: ProcessMan
       const message = err instanceof Error ? err.message : 'Unknown error';
       console.error(`[telegram] error: ${message}`);
       await ctx.reply(`Error: ${message}`).catch(() => {});
+    }
+  }
+
+  bot.on('text', async (ctx) => {
+    const text = ctx.message.text;
+    const label = text.substring(0, 80) + (text.length > 80 ? '...' : '');
+    await handleMessage(ctx, text, label);
+  });
+
+  bot.on('photo', async (ctx) => {
+    try {
+      // Get the largest resolution
+      const photo = ctx.message.photo[ctx.message.photo.length - 1];
+      const fileLink = await ctx.telegram.getFileLink(photo.file_id);
+
+      // Download and base64-encode
+      const resp = await fetch(fileLink.toString());
+      if (!resp.ok) throw new Error(`Failed to download photo: ${resp.status}`);
+      const buffer = Buffer.from(await resp.arrayBuffer());
+      const base64Data = buffer.toString('base64');
+
+      // Detect media type from URL
+      const url = fileLink.toString();
+      const mediaType = url.endsWith('.png') ? 'image/png'
+        : url.endsWith('.gif') ? 'image/gif'
+        : url.endsWith('.webp') ? 'image/webp'
+        : 'image/jpeg';
+
+      const caption = ctx.message.caption || 'What do you see in this image?';
+      const content: ContentBlock[] = [
+        { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64Data } },
+        { type: 'text', text: caption },
+      ];
+
+      const label = `[photo] ${caption.substring(0, 60)}`;
+      await handleMessage(ctx, content, label);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[telegram] photo error: ${message}`);
+      await ctx.reply(`Error processing photo: ${message}`).catch(() => {});
     }
   });
 
