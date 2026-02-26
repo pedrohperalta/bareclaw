@@ -1,5 +1,20 @@
-import { describe, it, expect } from 'vitest';
-import { parsePrUrl, isRepoAllowed, channelKey, tempDir } from './github-pr-review.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { parsePrUrl, isRepoAllowed, channelKey, tempDir, processGitHubPrReview } from './github-pr-review.js';
+import type { ProcessManager } from './process-manager.js';
+import type { Config } from '../config.js';
+
+vi.mock('child_process', () => ({
+  execFile: vi.fn((...args: unknown[]) => {
+    // promisify calls execFile with the callback as the last argument
+    const cb = args[args.length - 1];
+    if (typeof cb === 'function') cb(null, '', '');
+    return { unref: vi.fn() };
+  }),
+}));
+
+vi.mock('fs/promises', () => ({
+  rm: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe('parsePrUrl', () => {
   it('parses a valid GitHub PR URL', () => {
@@ -75,5 +90,112 @@ describe('channelKey', () => {
 describe('tempDir', () => {
   it('generates a temp directory path', () => {
     expect(tempDir({ owner: 'acme', repo: 'app', number: 42 })).toBe('/tmp/bareclaw-review-acme-app-42');
+  });
+});
+
+function mockProcessManager(overrides: Partial<ProcessManager> = {}) {
+  return {
+    send: vi.fn().mockResolvedValue({ text: 'review done', duration_ms: 1000, is_error: false }),
+    shutdown: vi.fn(),
+    shutdownHosts: vi.fn(),
+    ...overrides,
+  } as unknown as ProcessManager;
+}
+
+function mockConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    port: 3000,
+    cwd: '/tmp',
+    maxTurns: 25,
+    allowedTools: 'Read,Bash',
+    timeoutMs: 0,
+    httpToken: undefined,
+    telegramToken: undefined,
+    allowedUsers: [],
+    sessionFile: '.bareclaw-sessions.json',
+    reviewRepos: ['acme/app'],
+    ...overrides,
+  };
+}
+
+describe('processGitHubPrReview', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('calls processManager.send with the cloned repo cwd', async () => {
+    const pm = mockProcessManager();
+    const pr = { owner: 'acme', repo: 'app', number: 42 };
+
+    await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
+
+    expect(pm.send).toHaveBeenCalledWith(
+      'github-pr-acme-app-42',
+      expect.stringContaining('reviewing a pull request'),
+      { channel: 'github-pr-acme-app-42', adapter: 'github-pr-review' },
+      undefined,
+      { cwd: '/tmp/bareclaw-review-acme-app-42' },
+    );
+  });
+
+  it('injects the PR URL into the prompt', async () => {
+    const pm = mockProcessManager();
+    const pr = { owner: 'acme', repo: 'app', number: 42 };
+
+    await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
+
+    const prompt = (pm.send as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
+    expect(prompt).toContain('https://github.com/acme/app/pull/42');
+    expect(prompt).not.toContain('{PR_URL}');
+  });
+
+  it('cleans up temp directory after successful review', async () => {
+    const { rm } = await import('fs/promises');
+    const pm = mockProcessManager();
+    const pr = { owner: 'acme', repo: 'app', number: 42 };
+
+    await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
+
+    expect(rm).toHaveBeenCalledWith('/tmp/bareclaw-review-acme-app-42', { recursive: true, force: true });
+  });
+
+  it('cleans up temp directory after failed review', async () => {
+    const { rm } = await import('fs/promises');
+    const pm = mockProcessManager({
+      send: vi.fn().mockRejectedValue(new Error('session crashed')),
+    } as unknown as Partial<ProcessManager>);
+    const pr = { owner: 'acme', repo: 'app', number: 42 };
+
+    await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
+
+    expect(rm).toHaveBeenCalledWith('/tmp/bareclaw-review-acme-app-42', { recursive: true, force: true });
+  });
+
+  it('skips processing when signal is already aborted', async () => {
+    const pm = mockProcessManager();
+    const pr = { owner: 'acme', repo: 'app', number: 42 };
+    const abort = new AbortController();
+    abort.abort();
+
+    await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig(), abort.signal);
+
+    expect(pm.send).not.toHaveBeenCalled();
+  });
+
+  it('throws on is_error response from Claude', async () => {
+    const { execFile } = await import('child_process');
+    const pm = mockProcessManager({
+      send: vi.fn().mockResolvedValue({ text: 'Session ended', duration_ms: 0, is_error: true }),
+    } as unknown as Partial<ProcessManager>);
+    const pr = { owner: 'acme', repo: 'app', number: 42 };
+
+    await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
+
+    // Should have tried to post a failure comment via gh
+    const ghCalls = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call: unknown[]) => call[0] === 'gh'
+    );
+    expect(ghCalls.length).toBe(1);
+    expect(ghCalls[0][1]).toContain('pr');
   });
 });

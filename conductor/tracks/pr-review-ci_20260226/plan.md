@@ -46,10 +46,10 @@ Handle Claude session failures gracefully.
 
 ### Tasks
 
-- [ ] Task 3.1: Catch errors from `ProcessManager.send()` and any clone/spawn failures
-- [ ] Task 3.2: On failure, post a comment on the PR via `gh pr comment` indicating the automated review failed (include error summary)
-- [ ] Task 3.3: Ensure temp directory cleanup runs regardless of success or failure
-- [ ] Task 3.4: Write tests for failure scenarios (invalid repo, clone failure, session crash)
+- [x] Task 3.1: Catch errors from `ProcessManager.send()` and any clone/spawn failures
+- [x] Task 3.2: On failure, post a comment on the PR via `gh pr comment` indicating the automated review failed (include error summary)
+- [x] Task 3.3: Ensure temp directory cleanup runs regardless of success or failure
+- [x] Task 3.4: Write tests for failure scenarios (invalid repo, clone failure, session crash)
 
 ### Verification
 
@@ -61,9 +61,9 @@ When a new review is triggered for the same PR, cancel the in-progress one and s
 
 ### Tasks
 
-- [ ] Task 4.1: Track active reviews in a `Map<channelKey, { abort: AbortController, tempDir: string }>`
-- [ ] Task 4.2: On new request for the same PR: kill the existing session (via ProcessManager channel teardown), clean up the old temp dir, then start fresh
-- [ ] Task 4.3: Write tests for cancel-and-restart behavior
+- [x] Task 4.1: Track active reviews in a `Map<channelKey, { abort: AbortController, tempDir: string }>`
+- [x] Task 4.2: On new request for the same PR: kill the existing session (via ProcessManager channel teardown), clean up the old temp dir, then start fresh
+- [x] Task 4.3: Write tests for cancel-and-restart behavior
 
 ### Verification
 
