@@ -1,0 +1,38 @@
+{
+  "status": "complete",
+  "project_type": "brownfield",
+  "current_section": "complete",
+  "current_question": 0,
+  "completed_sections": ["product", "guidelines", "tech_stack", "workflow", "styleguides"],
+  "answers": {
+    "project_name": "Bareclaw",
+    "description": "A thin multiplexer that routes messages from HTTP, Telegram, and other channels into long-lived, persistent Claude CLI sessions — turning Claude Code into a personal AI agent daemon.",
+    "problem": "Claude Code is powerful but locked to a terminal — there's no way to interact with it persistently from Telegram, HTTP, or other channels.",
+    "target_users": "Developers who want a persistent Claude agent accessible from multiple channels",
+    "key_goals": "Persistent sessions, multi-channel routing, minimal config",
+    "voice_tone": "Concise and direct",
+    "design_principles": "Simplicity over features, Developer experience focused, Reliability",
+    "languages": "TypeScript, Bash/Shell",
+    "frontend": "None",
+    "backend": "Express 5",
+    "database": "None (planning to add later)",
+    "infrastructure": "Self-hosted / Docker",
+    "tdd": "Moderate",
+    "commits": "Conventional Commits",
+    "code_review": "Optional / self-review OK",
+    "verification": "Only at track completion",
+    "style_guides": "TypeScript/JavaScript",
+    "conventions": "Generate fresh guides"
+  },
+  "files_created": [
+    "conductor/index.md",
+    "conductor/product.md",
+    "conductor/product-guidelines.md",
+    "conductor/tech-stack.md",
+    "conductor/workflow.md",
+    "conductor/tracks.md",
+    "conductor/code_styleguides/typescript.md"
+  ],
+  "started_at": "2026-02-26T00:00:00.000Z",
+  "last_updated": "2026-02-26T00:00:00.000Z"
+}
