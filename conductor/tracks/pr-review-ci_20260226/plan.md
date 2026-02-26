@@ -31,10 +31,10 @@ Clone the repo and spawn a Claude session inside it with a review-focused system
 
 ### Tasks
 
-- [ ] Task 2.1: Implement async `processGitHubPrReview(prUrl, processManager)` function that clones the repo to `/tmp/bareclaw-review-{owner}-{repo}-{pr}`
-- [ ] Task 2.2: Craft the system prompt that instructs Claude to: check out the PR branch, look for a review skill in `.claude/commands/`, and if found use it — otherwise fall back to `gh pr diff` + `gh pr review`
-- [ ] Task 2.3: Spawn a one-shot Claude session using `ProcessManager.send()` with a unique channel key (e.g. `github-pr-{owner}-{repo}-{pr}`) and the cloned repo as cwd
-- [ ] Task 2.4: Handle cleanup — remove the temp directory after the review completes
+- [x] Task 2.1: Implement async `processGitHubPrReview(prUrl, processManager)` function that clones the repo to `/tmp/bareclaw-review-{owner}-{repo}-{pr}`
+- [x] Task 2.2: Craft the system prompt that instructs Claude to: check out the PR branch, look for a review skill in `.claude/commands/`, and if found use it — otherwise fall back to `gh pr diff` + `gh pr review`
+- [x] Task 2.3: Spawn a one-shot Claude session using `ProcessManager.send()` with a unique channel key (e.g. `github-pr-{owner}-{repo}-{pr}`) and the cloned repo as cwd
+- [x] Task 2.4: Handle cleanup — remove the temp directory after the review completes
 
 ### Verification
 

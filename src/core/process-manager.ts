@@ -80,14 +80,14 @@ export class ProcessManager {
    * Callers don't need to coordinate — multiple concurrent send() calls to the
    * same channel are safe and will be processed in arrival order.
    */
-  async send(channel: string, content: MessageContent, context?: ChannelContext, onEvent?: EventCallback): Promise<SendMessageResponse> {
+  async send(channel: string, content: MessageContent, context?: ChannelContext, onEvent?: EventCallback, options?: { cwd?: string }): Promise<SendMessageResponse> {
     let managed = this.channels.get(channel);
 
     if (!managed) {
       // Prevent concurrent connectOrSpawn for the same channel
       let pending = this.connecting.get(channel);
       if (!pending) {
-        pending = this.connectOrSpawn(channel);
+        pending = this.connectOrSpawn(channel, options?.cwd);
         this.connecting.set(channel, pending);
       }
       try {
@@ -136,7 +136,7 @@ export class ProcessManager {
     this.shutdown();
   }
 
-  private async connectOrSpawn(channel: string): Promise<ManagedChannel> {
+  private async connectOrSpawn(channel: string, cwd?: string): Promise<ManagedChannel> {
     const sockPath = this.socketPath(channel);
 
     // Try reconnecting to an existing session host
@@ -156,11 +156,12 @@ export class ProcessManager {
     const adapterPrefix = dash > 0 ? channel.substring(0, dash) : channel;
     const adapterNames: Record<string, string> = { tg: 'telegram', http: 'http' };
 
+    const effectiveCwd = cwd || this.config.cwd;
     const hostConfig = JSON.stringify({
       channel,
       socketPath: sockPath,
       pidFile: this.pidFile(channel),
-      cwd: this.config.cwd,
+      cwd: effectiveCwd,
       maxTurns: this.config.maxTurns,
       allowedTools: this.config.allowedTools,
       resumeSessionId: sessionId || undefined,
@@ -173,7 +174,7 @@ export class ProcessManager {
     const hostProc = spawn(runner, [sessionHostPath, hostConfig], {
       detached: true,
       stdio: 'ignore',
-      cwd: this.config.cwd,
+      cwd: effectiveCwd,
       env: process.env,
     });
     hostProc.unref();

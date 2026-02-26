@@ -85,7 +85,7 @@ export async function processGitHubPrReview(
     const response = await processManager.send(channel, prompt, {
       channel,
       adapter: 'github-pr-review',
-    });
+    }, undefined, { cwd: dir });
 
     if (response.is_error) {
       throw new Error(`Claude session error: ${response.text}`);
