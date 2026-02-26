@@ -1,0 +1,34 @@
+# GitHub Actions workflow for automated PR review via BAREclaw
+#
+# Setup:
+#   1. BAREclaw must be running and accessible from GitHub Actions runners
+#      (e.g. via a public URL, tunnel, or self-hosted runner on the same network)
+#   2. Set these repository secrets:
+#      - BARECLAW_URL: Your BAREclaw instance URL (e.g. https://bareclaw.example.com)
+#      - BARECLAW_TOKEN: The BARECLAW_HTTP_TOKEN value for auth
+#   3. Add the target repo to BARECLAW_REVIEW_REPOS env var on the BAREclaw host
+#      (e.g. BARECLAW_REVIEW_REPOS=myorg/myrepo,myorg/other-repo)
+#   4. Ensure `gh` CLI is authenticated on the BAREclaw host (gh auth login)
+#
+# How it works:
+#   - Triggers on PR open or new push to an open PR
+#   - Sends the PR URL to BAREclaw's /github-pr-review endpoint
+#   - BAREclaw clones the repo, spawns a Claude Code session, and posts the review
+#   - The action returns immediately (fire-and-forget); the review appears asynchronously
+
+name: PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request PR review from BAREclaw
+        run: |
+          curl -sf -X POST "${{ secrets.BARECLAW_URL }}/github-pr-review" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${{ secrets.BARECLAW_TOKEN }}" \
+            -d "{\"pr_url\": \"${{ github.event.pull_request.html_url }}\"}"

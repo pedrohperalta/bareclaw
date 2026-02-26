@@ -3,7 +3,7 @@
 **Track ID:** pr-review-ci_20260226
 **Spec:** [spec.md](./spec.md)
 **Created:** 2026-02-26
-**Status:** [~] In Progress
+**Status:** [x] Complete
 
 ## Overview
 
@@ -75,8 +75,8 @@ Provide a reusable GitHub Actions workflow snippet.
 
 ### Tasks
 
-- [ ] Task 5.1: Create a sample GitHub Actions workflow file (e.g. `examples/github-pr-review.yml`) that triggers on `pull_request` opened/synchronize and curls `POST /github-pr-review`
-- [ ] Task 5.2: Document the setup requirements (BAREclaw host URL, auth token, `gh` CLI auth on the BAREclaw host)
+- [x] Task 5.1: Create a sample GitHub Actions workflow file (e.g. `examples/github-pr-review.yml`) that triggers on `pull_request` opened/synchronize and curls `POST /github-pr-review`
+- [x] Task 5.2: Document the setup requirements (BAREclaw host URL, auth token, `gh` CLI auth on the BAREclaw host)
 
 ### Verification
 
