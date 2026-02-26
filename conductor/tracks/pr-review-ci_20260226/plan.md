@@ -18,6 +18,7 @@ Add the new route with input validation and repo allowlist enforcement.
 - [x] Task 1.1: Add `POST /github-pr-review` route in `src/adapters/http.ts` that accepts `{ "pr_url": "..." }` and returns `{ "status": "queued" }` immediately
 - [x] Task 1.2: Implement PR URL parser to extract owner, repo, and PR number from `https://github.com/{owner}/{repo}/pull/{number}`
 - [x] Task 1.3: Add repo allowlist configuration (env var `BARECLAW_REVIEW_REPOS`, comma-separated, e.g. `owner/repo,owner/repo2`)
+- [x] Task 1.3.1: Update `.env.example` with `BARECLAW_REVIEW_REPOS` template
 - [x] Task 1.4: Validate the parsed repo against the allowlist; return 403 if not allowed
 - [x] Task 1.5: Write tests for URL parsing, allowlist validation, and error responses
 
