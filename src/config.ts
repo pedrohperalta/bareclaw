@@ -18,6 +18,8 @@ export interface Config {
   telegramToken: string | undefined;
   allowedUsers: number[];
   sessionFile: string;
+  /** Comma-separated list of owner/repo allowed for PR review (e.g. "acme/app,acme/lib") */
+  reviewRepos: string[];
 }
 
 export function loadConfig(): Config {
@@ -34,5 +36,9 @@ export function loadConfig(): Config {
       ? allowedUsersRaw.split(',').map((s) => parseInt(s.trim(), 10)).filter(Number.isFinite)
       : [],
     sessionFile: process.env.BARECLAW_SESSION_FILE || '.bareclaw-sessions.json',
+    reviewRepos: (process.env.BARECLAW_REVIEW_REPOS || '')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean),
   };
 }

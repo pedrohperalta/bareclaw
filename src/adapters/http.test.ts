@@ -16,6 +16,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     telegramToken: undefined,
     allowedUsers: [],
     sessionFile: '.bareclaw-sessions.json',
+    reviewRepos: [],
     ...overrides,
   };
 }
@@ -189,6 +190,45 @@ describe('HTTP adapter', () => {
 
       const res = await request(app, '/send', { channel: 'unknown-123', text: 'hi' });
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('POST /github-pr-review', () => {
+    it('returns 400 for missing pr_url', async () => {
+      const app = buildApp(makeConfig(), mockProcessManager(), mockPushRegistry());
+      const res = await request(app, '/github-pr-review', {});
+      expect(res.status).toBe(400);
+      expect((res.body as { error: string }).error).toContain('pr_url');
+    });
+
+    it('returns 400 for invalid PR URL', async () => {
+      const app = buildApp(makeConfig(), mockProcessManager(), mockPushRegistry());
+      const res = await request(app, '/github-pr-review', { pr_url: 'https://example.com/not-a-pr' });
+      expect(res.status).toBe(400);
+      expect((res.body as { error: string }).error).toContain('Invalid PR URL');
+    });
+
+    it('returns 403 for repo not in allowlist', async () => {
+      const config = makeConfig({ reviewRepos: ['allowed/repo'] });
+      const app = buildApp(config, mockProcessManager(), mockPushRegistry());
+      const res = await request(app, '/github-pr-review', { pr_url: 'https://github.com/blocked/repo/pull/1' });
+      expect(res.status).toBe(403);
+      expect((res.body as { error: string }).error).toContain('not in the review allowlist');
+    });
+
+    it('returns 403 when allowlist is empty', async () => {
+      const config = makeConfig({ reviewRepos: [] });
+      const app = buildApp(config, mockProcessManager(), mockPushRegistry());
+      const res = await request(app, '/github-pr-review', { pr_url: 'https://github.com/acme/app/pull/1' });
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 200 with queued status for allowed repo', async () => {
+      const config = makeConfig({ reviewRepos: ['acme/app'] });
+      const app = buildApp(config, mockProcessManager(), mockPushRegistry());
+      const res = await request(app, '/github-pr-review', { pr_url: 'https://github.com/acme/app/pull/42' });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ status: 'queued', pr_url: 'https://github.com/acme/app/pull/42' });
     });
   });
 

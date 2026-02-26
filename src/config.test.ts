@@ -25,6 +25,7 @@ describe('loadConfig', () => {
     expect(config.allowedUsers).toEqual([]);
     expect(config.sessionFile).toBe('.bareclaw-sessions.json');
     expect(config.allowedTools).toBe('Read,Glob,Grep,Bash,Write,Edit,Skill,Task');
+    expect(config.reviewRepos).toEqual([]);
   });
 
   it('reads port from env', () => {
@@ -55,6 +56,21 @@ describe('loadConfig', () => {
   it('handles empty allowed users', () => {
     process.env.BARECLAW_ALLOWED_USERS = '';
     expect(loadConfig().allowedUsers).toEqual([]);
+  });
+
+  it('parses review repos as comma-separated list', () => {
+    process.env.BARECLAW_REVIEW_REPOS = 'acme/app, acme/lib';
+    expect(loadConfig().reviewRepos).toEqual(['acme/app', 'acme/lib']);
+  });
+
+  it('lowercases review repos', () => {
+    process.env.BARECLAW_REVIEW_REPOS = 'Acme/App';
+    expect(loadConfig().reviewRepos).toEqual(['acme/app']);
+  });
+
+  it('handles empty review repos', () => {
+    process.env.BARECLAW_REVIEW_REPOS = '';
+    expect(loadConfig().reviewRepos).toEqual([]);
   });
 
   it('expands ~ in cwd', () => {

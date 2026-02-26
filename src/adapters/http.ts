@@ -3,6 +3,7 @@ import type { Config } from '../config.js';
 import type { ProcessManager } from '../core/process-manager.js';
 import type { ChannelContext, PushMedia, SendMessageRequest } from '../core/types.js';
 import type { PushRegistry } from '../core/push-registry.js';
+import { parsePrUrl, isRepoAllowed, channelKey, processGitHubPrReview } from '../core/github-pr-review.js';
 
 export function createHttpAdapter(config: Config, processManager: ProcessManager, restart: () => void, pushRegistry: PushRegistry): Router {
   const router = express.Router();
@@ -82,6 +83,50 @@ export function createHttpAdapter(config: Config, processManager: ProcessManager
       console.error(`[http] /send error: ${message}`);
       res.status(500).json({ error: message });
     }
+  });
+
+  // Active PR reviews tracked for cancel-and-restart
+  const activeReviews = new Map<string, { abort: AbortController; tempDir: string }>();
+
+  router.post('/github-pr-review', async (req, res) => {
+    const { pr_url } = req.body as { pr_url?: string };
+
+    if (!pr_url || typeof pr_url !== 'string') {
+      res.status(400).json({ error: 'Missing "pr_url" field' });
+      return;
+    }
+
+    const pr = parsePrUrl(pr_url);
+    if (!pr) {
+      res.status(400).json({ error: 'Invalid PR URL. Expected format: https://github.com/{owner}/{repo}/pull/{number}' });
+      return;
+    }
+
+    if (!isRepoAllowed(pr, config.reviewRepos)) {
+      res.status(403).json({ error: `Repository ${pr.owner}/${pr.repo} is not in the review allowlist` });
+      return;
+    }
+
+    const channel = channelKey(pr);
+
+    // Cancel any in-progress review for the same PR
+    const existing = activeReviews.get(channel);
+    if (existing) {
+      console.log(`[http] cancelling in-progress review for ${pr_url}`);
+      existing.abort.abort();
+      activeReviews.delete(channel);
+    }
+
+    const abort = new AbortController();
+    activeReviews.set(channel, { abort, tempDir: `/tmp/bareclaw-review-${pr.owner}-${pr.repo}-${pr.number}` });
+
+    console.log(`[http] queued PR review: ${pr_url}`);
+    res.json({ status: 'queued', pr_url });
+
+    // Process asynchronously
+    processGitHubPrReview(pr_url, pr, processManager, config, abort.signal).finally(() => {
+      activeReviews.delete(channel);
+    });
   });
 
   router.post('/restart', (_req, res) => {
