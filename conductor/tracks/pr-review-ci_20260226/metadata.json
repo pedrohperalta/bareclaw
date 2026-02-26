@@ -1,0 +1,16 @@
+{
+  "id": "pr-review-ci_20260226",
+  "title": "PR Review CI/CD Integration",
+  "type": "feature",
+  "status": "pending",
+  "created": "2026-02-26T00:00:00.000Z",
+  "updated": "2026-02-26T00:00:00.000Z",
+  "phases": {
+    "total": 5,
+    "completed": 0
+  },
+  "tasks": {
+    "total": 16,
+    "completed": 0
+  }
+}

@@ -12,7 +12,7 @@ Navigation hub for project context.
 
 ## Active Tracks
 
-<!-- Auto-populated by /conductor:new-track -->
+- [ ] [PR Review CI/CD Integration](./tracks/pr-review-ci_20260226/index.md)
 
 ## Getting Started
 

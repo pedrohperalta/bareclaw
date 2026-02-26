@@ -3,4 +3,4 @@
 | Status | Track ID | Title | Created | Updated |
 | ------ | -------- | ----- | ------- | ------- |
 
-<!-- Tracks registered by /conductor:new-track -->
+| [ ] | pr-review-ci_20260226 | PR Review CI/CD Integration | 2026-02-26 | 2026-02-26 |
