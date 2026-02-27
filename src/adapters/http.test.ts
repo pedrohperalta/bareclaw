@@ -216,11 +216,11 @@ describe('HTTP adapter', () => {
       expect((res.body as { error: string }).error).toContain('not in the review allowlist');
     });
 
-    it('returns 403 when allowlist is empty', async () => {
+    it('returns 200 when allowlist is empty (allow all)', async () => {
       const config = makeConfig({ reviewRepos: [] });
       const app = buildApp(config, mockProcessManager(), mockPushRegistry());
       const res = await request(app, '/github-pr-review', { pr_url: 'https://github.com/acme/app/pull/1' });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('returns 200 with queued status for allowed repo', async () => {

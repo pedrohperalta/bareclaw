@@ -23,7 +23,7 @@ export function parsePrUrl(url: string): PrInfo | null {
 }
 
 export function isRepoAllowed(pr: PrInfo, allowedRepos: string[]): boolean {
-  if (allowedRepos.length === 0) return false;
+  if (allowedRepos.length === 0) return true;
   const repoKey = `${pr.owner}/${pr.repo}`.toLowerCase();
   return allowedRepos.some(r => r.toLowerCase() === repoKey);
 }

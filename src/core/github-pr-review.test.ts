@@ -84,8 +84,8 @@ describe('isRepoAllowed', () => {
     expect(isRepoAllowed(pr, ['other/repo'])).toBe(false);
   });
 
-  it('returns false when allowlist is empty', () => {
-    expect(isRepoAllowed(pr, [])).toBe(false);
+  it('returns true when allowlist is empty (allow all)', () => {
+    expect(isRepoAllowed(pr, [])).toBe(true);
   });
 
   it('works with multiple repos in allowlist', () => {
