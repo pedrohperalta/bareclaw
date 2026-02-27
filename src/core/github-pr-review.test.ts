@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { parsePrUrl, isRepoAllowed, channelKey, tempDir, processGitHubPrReview } from './github-pr-review.js';
+import { parsePrUrl, isRepoAllowed, channelKey, tempDir, hasCodeReviewPlugin, pluginRepoDir, processGitHubPrReview } from './github-pr-review.js';
 import type { ProcessManager } from './process-manager.js';
 import type { Config } from '../config.js';
 
@@ -15,6 +15,18 @@ vi.mock('child_process', () => ({
 vi.mock('fs/promises', () => ({
   rm: vi.fn().mockResolvedValue(undefined),
 }));
+
+const existsSyncMock = vi.fn().mockReturnValue(false);
+const readFileSyncMock = vi.fn().mockReturnValue('');
+
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    existsSync: (...args: unknown[]) => existsSyncMock(...args),
+    readFileSync: (...args: unknown[]) => readFileSyncMock(...args),
+  };
+});
 
 describe('parsePrUrl', () => {
   it('parses a valid GitHub PR URL', () => {
@@ -93,6 +105,44 @@ describe('tempDir', () => {
   });
 });
 
+describe('pluginRepoDir', () => {
+  it('generates a plugin repo temp directory path', () => {
+    expect(pluginRepoDir({ owner: 'acme', repo: 'app', number: 42 })).toBe('/tmp/bareclaw-plugins-acme-app-42');
+  });
+});
+
+describe('hasCodeReviewPlugin', () => {
+  beforeEach(() => {
+    existsSyncMock.mockReturnValue(false);
+    readFileSyncMock.mockReturnValue('');
+  });
+
+  it('returns true when plugin.json exists in plugins/code-review', () => {
+    existsSyncMock.mockImplementation((path: string) =>
+      path.includes('plugins/code-review/.claude-plugin/plugin.json'));
+    expect(hasCodeReviewPlugin('/tmp/repo')).toBe(true);
+  });
+
+  it('returns true when plugins.json references code-review', () => {
+    existsSyncMock.mockImplementation((path: string) =>
+      path.includes('.claude/plugins.json'));
+    readFileSyncMock.mockReturnValue(JSON.stringify([{ name: 'code-review' }]));
+    expect(hasCodeReviewPlugin('/tmp/repo')).toBe(true);
+  });
+
+  it('returns false when no plugin is found', () => {
+    existsSyncMock.mockReturnValue(false);
+    expect(hasCodeReviewPlugin('/tmp/repo')).toBe(false);
+  });
+
+  it('returns false when plugins.json exists but has no code-review', () => {
+    existsSyncMock.mockImplementation((path: string) =>
+      path.includes('.claude/plugins.json'));
+    readFileSyncMock.mockReturnValue(JSON.stringify([{ name: 'other-plugin' }]));
+    expect(hasCodeReviewPlugin('/tmp/repo')).toBe(false);
+  });
+});
+
 function mockProcessManager(overrides: Partial<ProcessManager> = {}) {
   return {
     send: vi.fn().mockResolvedValue({ text: 'review done', duration_ms: 1000, is_error: false }),
@@ -121,9 +171,27 @@ function mockConfig(overrides: Partial<Config> = {}): Config {
 describe('processGitHubPrReview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    existsSyncMock.mockReturnValue(false);
   });
 
-  it('calls processManager.send with the code-review plugin command', async () => {
+  it('clones plugin repo and passes pluginDirs when plugin not found', async () => {
+    const pm = mockProcessManager();
+    const pr = { owner: 'acme', repo: 'app', number: 42 };
+
+    await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
+
+    expect(pm.send).toHaveBeenCalledWith(
+      'github-pr-acme-app-42',
+      'Run /code-review:review-pr 42 --repo acme/app',
+      { channel: 'github-pr-acme-app-42', adapter: 'github-pr-review' },
+      undefined,
+      { cwd: '/tmp/bareclaw-review-acme-app-42', pluginDirs: ['/tmp/bareclaw-plugins-acme-app-42/plugins/code-review'] },
+    );
+  });
+
+  it('skips plugin clone when target repo has the plugin', async () => {
+    existsSyncMock.mockImplementation((path: string) =>
+      path.includes('plugins/code-review/.claude-plugin/plugin.json'));
     const pm = mockProcessManager();
     const pr = { owner: 'acme', repo: 'app', number: 42 };
 
@@ -136,9 +204,16 @@ describe('processGitHubPrReview', () => {
       undefined,
       { cwd: '/tmp/bareclaw-review-acme-app-42' },
     );
+
+    // Verify no plugin repo clone was attempted (only 1 gh clone call for the target repo)
+    const { execFile } = await import('child_process');
+    const cloneCalls = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call: unknown[]) => call[0] === 'gh' && Array.isArray(call[1]) && call[1][1] === 'clone'
+    );
+    expect(cloneCalls.length).toBe(1);
   });
 
-  it('cleans up temp directory after successful review', async () => {
+  it('cleans up both temp directories after successful review', async () => {
     const { rm } = await import('fs/promises');
     const pm = mockProcessManager();
     const pr = { owner: 'acme', repo: 'app', number: 42 };
@@ -146,9 +221,10 @@ describe('processGitHubPrReview', () => {
     await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
 
     expect(rm).toHaveBeenCalledWith('/tmp/bareclaw-review-acme-app-42', { recursive: true, force: true });
+    expect(rm).toHaveBeenCalledWith('/tmp/bareclaw-plugins-acme-app-42', { recursive: true, force: true });
   });
 
-  it('cleans up temp directory after failed review', async () => {
+  it('cleans up both temp directories after failed review', async () => {
     const { rm } = await import('fs/promises');
     const pm = mockProcessManager({
       send: vi.fn().mockRejectedValue(new Error('session crashed')),
@@ -158,6 +234,7 @@ describe('processGitHubPrReview', () => {
     await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
 
     expect(rm).toHaveBeenCalledWith('/tmp/bareclaw-review-acme-app-42', { recursive: true, force: true });
+    expect(rm).toHaveBeenCalledWith('/tmp/bareclaw-plugins-acme-app-42', { recursive: true, force: true });
   });
 
   it('skips processing when signal is already aborted', async () => {

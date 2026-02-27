@@ -1,5 +1,7 @@
 import { execFile } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
 import { rm } from 'fs/promises';
+import { join } from 'path';
 import { promisify } from 'util';
 import type { Config } from '../config.js';
 import type { ProcessManager } from './process-manager.js';
@@ -34,6 +36,36 @@ export function tempDir(pr: PrInfo): string {
   return `/tmp/bareclaw-review-${pr.owner}-${pr.repo}-${pr.number}`;
 }
 
+const PLUGIN_REPO = 'stone-payments/gen-ai-agents';
+const PLUGIN_PATH = 'plugins/code-review';
+
+export function hasCodeReviewPlugin(dir: string): boolean {
+  // Check if the plugin is directly in the repo
+  if (existsSync(join(dir, PLUGIN_PATH, '.claude-plugin', 'plugin.json'))) return true;
+
+  // Check if it's registered in .claude/plugins.json
+  try {
+    const pluginsFile = join(dir, '.claude', 'plugins.json');
+    if (existsSync(pluginsFile)) {
+      const content = readFileSync(pluginsFile, 'utf-8');
+      if (content.includes('code-review')) return true;
+    }
+  } catch {}
+
+  return false;
+}
+
+export function pluginRepoDir(pr: PrInfo): string {
+  return `/tmp/bareclaw-plugins-${pr.owner}-${pr.repo}-${pr.number}`;
+}
+
+export async function clonePluginRepo(pr: PrInfo, signal?: AbortSignal): Promise<string> {
+  const dir = pluginRepoDir(pr);
+  console.log(`[github-pr-review] cloning plugin repo ${PLUGIN_REPO} to ${dir}`);
+  await execFileAsync('gh', ['repo', 'clone', PLUGIN_REPO, dir, '--', '--depth=1'], { signal });
+  return join(dir, PLUGIN_PATH);
+}
+
 const REVIEW_SYSTEM_PROMPT = `Run /code-review:review-pr {PR_NUMBER} --repo {REPO_SLUG}`;
 
 export async function processGitHubPrReview(
@@ -44,6 +76,7 @@ export async function processGitHubPrReview(
   signal?: AbortSignal,
 ): Promise<void> {
   const dir = tempDir(pr);
+  const pluginDir = pluginRepoDir(pr);
   const channel = channelKey(pr);
 
   try {
@@ -53,6 +86,18 @@ export async function processGitHubPrReview(
     const repoSlug = `${pr.owner}/${pr.repo}`;
     console.log(`[github-pr-review] cloning ${repoSlug} to ${dir}`);
     await execFileAsync('gh', ['repo', 'clone', repoSlug, dir, '--', '--depth=1'], { signal });
+
+    if (signal?.aborted) return;
+
+    // Check if the target repo already has the code-review plugin
+    const pluginDirs: string[] = [];
+    if (hasCodeReviewPlugin(dir)) {
+      console.log(`[github-pr-review] code-review plugin found in ${repoSlug}`);
+    } else {
+      console.log(`[github-pr-review] code-review plugin not found, cloning from ${PLUGIN_REPO}`);
+      const pluginPath = await clonePluginRepo(pr, signal);
+      pluginDirs.push(pluginPath);
+    }
 
     if (signal?.aborted) return;
 
@@ -66,7 +111,7 @@ export async function processGitHubPrReview(
     const response = await processManager.send(channel, prompt, {
       channel,
       adapter: 'github-pr-review',
-    }, undefined, { cwd: dir });
+    }, undefined, { cwd: dir, pluginDirs: pluginDirs.length > 0 ? pluginDirs : undefined });
 
     if (response.is_error) {
       throw new Error(`Claude session error: ${response.text}`);
@@ -91,12 +136,14 @@ export async function processGitHubPrReview(
       console.error(`[github-pr-review] failed to post comment: ${commentErr instanceof Error ? commentErr.message : commentErr}`);
     }
   } finally {
-    // Cleanup temp directory
-    try {
-      await rm(dir, { recursive: true, force: true });
-      console.log(`[github-pr-review] cleaned up ${dir}`);
-    } catch (cleanupErr) {
-      console.error(`[github-pr-review] cleanup failed for ${dir}: ${cleanupErr}`);
+    // Cleanup both temp directories
+    for (const d of [dir, pluginDir]) {
+      try {
+        await rm(d, { recursive: true, force: true });
+        console.log(`[github-pr-review] cleaned up ${d}`);
+      } catch (cleanupErr) {
+        console.error(`[github-pr-review] cleanup failed for ${d}: ${cleanupErr}`);
+      }
     }
   }
 }

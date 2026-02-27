@@ -14,6 +14,7 @@ Navigation hub for project context.
 
 - [x] [PR Review CI/CD Integration](./tracks/pr-review-ci_20260226/index.md)
 - [x] [Use Code-Review Plugin in PR Review Flow](./tracks/review-plugin_20260226/index.md)
+- [ ] [Pass Plugin Dir to PR Review Sessions](./tracks/review-plugin-dir_20260227/index.md)
 
 ## Getting Started
 
