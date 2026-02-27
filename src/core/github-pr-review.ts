@@ -65,10 +65,10 @@ export async function processGitHubPrReview(
   try {
     if (signal?.aborted) return;
 
-    // Clone the repo
-    const repoUrl = `https://github.com/${pr.owner}/${pr.repo}.git`;
-    console.log(`[github-pr-review] cloning ${repoUrl} to ${dir}`);
-    await execFileAsync('git', ['clone', '--depth=1', repoUrl, dir], { signal });
+    // Clone the repo using gh CLI (uses its auth token)
+    const repoSlug = `${pr.owner}/${pr.repo}`;
+    console.log(`[github-pr-review] cloning ${repoSlug} to ${dir}`);
+    await execFileAsync('gh', ['repo', 'clone', repoSlug, dir, '--', '--depth=1'], { signal });
 
     // Fetch the PR branch
     console.log(`[github-pr-review] fetching PR #${pr.number}`);
