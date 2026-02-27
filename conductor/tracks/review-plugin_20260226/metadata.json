@@ -1,0 +1,16 @@
+{
+  "id": "review-plugin_20260226",
+  "title": "Use Code-Review Plugin in PR Review Flow",
+  "type": "refactor",
+  "status": "complete",
+  "created": "2026-02-26T00:00:00.000Z",
+  "updated": "2026-02-26T00:00:00.000Z",
+  "phases": {
+    "total": 1,
+    "completed": 1
+  },
+  "tasks": {
+    "total": 3,
+    "completed": 3
+  }
+}

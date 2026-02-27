@@ -123,7 +123,7 @@ describe('processGitHubPrReview', () => {
     vi.clearAllMocks();
   });
 
-  it('calls processManager.send with the cloned repo cwd', async () => {
+  it('calls processManager.send with the code-review plugin command', async () => {
     const pm = mockProcessManager();
     const pr = { owner: 'acme', repo: 'app', number: 42 };
 
@@ -131,22 +131,11 @@ describe('processGitHubPrReview', () => {
 
     expect(pm.send).toHaveBeenCalledWith(
       'github-pr-acme-app-42',
-      expect.stringContaining('reviewing a pull request'),
+      'Run /code-review:review-pr 42 --repo acme/app',
       { channel: 'github-pr-acme-app-42', adapter: 'github-pr-review' },
       undefined,
       { cwd: '/tmp/bareclaw-review-acme-app-42' },
     );
-  });
-
-  it('injects the PR URL into the prompt', async () => {
-    const pm = mockProcessManager();
-    const pr = { owner: 'acme', repo: 'app', number: 42 };
-
-    await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
-
-    const prompt = (pm.send as ReturnType<typeof vi.fn>).mock.calls[0][1] as string;
-    expect(prompt).toContain('https://github.com/acme/app/pull/42');
-    expect(prompt).not.toContain('{PR_URL}');
   });
 
   it('cleans up temp directory after successful review', async () => {
@@ -191,11 +180,11 @@ describe('processGitHubPrReview', () => {
 
     await processGitHubPrReview('https://github.com/acme/app/pull/42', pr, pm, mockConfig());
 
-    // Should have tried to post a failure comment via gh
-    const ghCalls = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
-      (call: unknown[]) => call[0] === 'gh'
+    // Should have tried to post a failure comment via gh pr comment
+    const commentCalls = (execFile as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(
+      (call: unknown[]) => call[0] === 'gh' && Array.isArray(call[1]) && call[1][0] === 'pr'
     );
-    expect(ghCalls.length).toBe(1);
-    expect(ghCalls[0][1]).toContain('pr');
+    expect(commentCalls.length).toBe(1);
+    expect(commentCalls[0][1]).toContain('comment');
   });
 });

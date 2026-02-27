@@ -12,7 +12,8 @@ Navigation hub for project context.
 
 ## Active Tracks
 
-- [ ] [PR Review CI/CD Integration](./tracks/pr-review-ci_20260226/index.md)
+- [x] [PR Review CI/CD Integration](./tracks/pr-review-ci_20260226/index.md)
+- [x] [Use Code-Review Plugin in PR Review Flow](./tracks/review-plugin_20260226/index.md)
 
 ## Getting Started
 

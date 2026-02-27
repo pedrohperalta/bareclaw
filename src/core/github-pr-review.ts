@@ -34,23 +34,7 @@ export function tempDir(pr: PrInfo): string {
   return `/tmp/bareclaw-review-${pr.owner}-${pr.repo}-${pr.number}`;
 }
 
-const REVIEW_SYSTEM_PROMPT = `You are reviewing a pull request. Follow these steps:
-
-1. Look for a review skill in .claude/commands/ (e.g. review-pr.md, review.md, or similar).
-   - If found, execute that skill to perform the review.
-   - If not found, proceed with step 2.
-
-2. Default review process:
-   - Run: gh pr view {PR_URL} to understand the PR context
-   - Run: gh pr diff {PR_URL} to see all changes
-   - Analyze the changes for: correctness, potential bugs, security issues, and code quality
-   - Submit your review using: gh pr review {PR_URL} --body "<your review>"
-
-Important:
-- Be thorough but concise in your review
-- Focus on substantive issues, not style nitpicks
-- If the changes look good, approve with: gh pr review {PR_URL} --approve --body "<comment>"
-- If there are issues, request changes with: gh pr review {PR_URL} --request-changes --body "<issues>"`;
+const REVIEW_SYSTEM_PROMPT = `Run /code-review:review-pr {PR_NUMBER} --repo {REPO_SLUG}`;
 
 export async function processGitHubPrReview(
   prUrl: string,
@@ -65,20 +49,17 @@ export async function processGitHubPrReview(
   try {
     if (signal?.aborted) return;
 
-    // Clone the repo using gh CLI (uses its auth token)
+    // Clone the repo (stay on default branch for Conductor context)
     const repoSlug = `${pr.owner}/${pr.repo}`;
     console.log(`[github-pr-review] cloning ${repoSlug} to ${dir}`);
     await execFileAsync('gh', ['repo', 'clone', repoSlug, dir, '--', '--depth=1'], { signal });
 
-    // Fetch the PR branch
-    console.log(`[github-pr-review] fetching PR #${pr.number}`);
-    await execFileAsync('git', ['fetch', 'origin', `pull/${pr.number}/head:pr-${pr.number}`], { cwd: dir, signal });
-    await execFileAsync('git', ['checkout', `pr-${pr.number}`], { cwd: dir, signal });
-
     if (signal?.aborted) return;
 
-    // Build prompt with the PR URL injected
-    const prompt = REVIEW_SYSTEM_PROMPT.replaceAll('{PR_URL}', prUrl);
+    // Build prompt — the code-review plugin handles everything
+    const prompt = REVIEW_SYSTEM_PROMPT
+      .replace('{PR_NUMBER}', String(pr.number))
+      .replace('{REPO_SLUG}', repoSlug);
 
     // Spawn a one-shot Claude session in the cloned repo directory
     console.log(`[github-pr-review] starting review session for ${prUrl}`);

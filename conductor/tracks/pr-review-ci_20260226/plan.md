@@ -24,7 +24,7 @@ Add the new route with input validation and repo allowlist enforcement.
 
 ### Verification
 
-- [ ] Endpoint returns 200 for allowed repos, 403 for disallowed repos, 400 for invalid input
+- [x] Endpoint returns 200 for allowed repos, 403 for disallowed repos, 400 for invalid input
 
 ## Phase 2: Repo Cloning and Session Spawning
 
@@ -39,7 +39,7 @@ Clone the repo and spawn a Claude session inside it with a review-focused system
 
 ### Verification
 
-- [ ] A cloned repo appears in `/tmp/`, Claude session starts, and temp dir is cleaned up after completion
+- [x] A cloned repo appears in `/tmp/`, Claude session starts, and temp dir is cleaned up after completion
 
 ## Phase 3: Failure Handling
 
@@ -54,7 +54,7 @@ Handle Claude session failures gracefully.
 
 ### Verification
 
-- [ ] A failed review results in a PR comment explaining the failure and temp dir is cleaned up
+- [x] A failed review results in a PR comment explaining the failure and temp dir is cleaned up
 
 ## Phase 4: Concurrent Review Cancellation
 
@@ -68,7 +68,7 @@ When a new review is triggered for the same PR, cancel the in-progress one and s
 
 ### Verification
 
-- [ ] A second request for the same PR cancels the first, cleans up, and starts a new review
+- [x] A second request for the same PR cancels the first, cleans up, and starts a new review
 
 ## Phase 5: GitHub Actions Workflow
 
@@ -81,16 +81,16 @@ Provide a reusable GitHub Actions workflow snippet.
 
 ### Verification
 
-- [ ] Example workflow is valid YAML and documents all required configuration
+- [x] Example workflow is valid YAML and documents all required configuration
 
 ## Final Verification
 
-- [ ] All acceptance criteria met
-- [ ] Tests passing
-- [ ] Allowed repos enforced, disallowed repos rejected
-- [ ] Failed reviews post a comment on the PR
-- [ ] Concurrent reviews for the same PR cancel-and-restart correctly
-- [ ] Example workflow provided
+- [x] All acceptance criteria met
+- [x] Tests passing
+- [x] Allowed repos enforced, disallowed repos rejected
+- [x] Failed reviews post a comment on the PR
+- [x] Concurrent reviews for the same PR cancel-and-restart correctly
+- [x] Example workflow provided
 
 ---
 
