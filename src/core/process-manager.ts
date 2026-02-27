@@ -80,14 +80,14 @@ export class ProcessManager {
    * Callers don't need to coordinate — multiple concurrent send() calls to the
    * same channel are safe and will be processed in arrival order.
    */
-  async send(channel: string, content: MessageContent, context?: ChannelContext, onEvent?: EventCallback, options?: { cwd?: string }): Promise<SendMessageResponse> {
+  async send(channel: string, content: MessageContent, context?: ChannelContext, onEvent?: EventCallback, options?: { cwd?: string; pluginDirs?: string[] }): Promise<SendMessageResponse> {
     let managed = this.channels.get(channel);
 
     if (!managed) {
       // Prevent concurrent connectOrSpawn for the same channel
       let pending = this.connecting.get(channel);
       if (!pending) {
-        pending = this.connectOrSpawn(channel, options?.cwd);
+        pending = this.connectOrSpawn(channel, options?.cwd, options?.pluginDirs);
         this.connecting.set(channel, pending);
       }
       try {
@@ -136,7 +136,7 @@ export class ProcessManager {
     this.shutdown();
   }
 
-  private async connectOrSpawn(channel: string, cwd?: string): Promise<ManagedChannel> {
+  private async connectOrSpawn(channel: string, cwd?: string, pluginDirs?: string[]): Promise<ManagedChannel> {
     const sockPath = this.socketPath(channel);
 
     // Try reconnecting to an existing session host
@@ -166,6 +166,7 @@ export class ProcessManager {
       allowedTools: this.config.allowedTools,
       resumeSessionId: sessionId || undefined,
       channelContext: { channel, adapter: adapterNames[adapterPrefix] || adapterPrefix },
+      pluginDirs: pluginDirs || undefined,
     });
 
     const ext = import.meta.filename.endsWith('.ts') ? '.ts' : '.js';
